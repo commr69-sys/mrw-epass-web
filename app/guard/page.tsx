@@ -33,6 +33,7 @@ export default function GuardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false); // สถานะกำลังดึงข้อมูล
   const [studentData, setStudentData] = useState<LeaveRequest | null>(null);
   const [scanError, setScanError] = useState<string>('');
+  
 
   // ----------------------------------------------------
   // ฟังก์ชัน Login
