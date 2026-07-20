@@ -54,10 +54,11 @@ export default function GuardPage() {
   // ----------------------------------------------------
   const { ref } = useZxing({
     paused: !isScanning, // หยุดกล้องชั่วคราวเมื่อไม่ได้อยู่หน้าสแกน
-    onDecodeResult(result) {
-      const scannedText = result.getText();
-      handleScanResult(scannedText);
-    },
+  onDecodeResult(result: any) {
+  // ใช้ any เพื่อข้าม Type check และเผื่อทางเลือกรับค่าทั้งแบบ .text และ .getText()
+  const scannedText = result?.text || (result.getText ? result.getText() : result);
+  handleScanResult(scannedText);
+},
   });
 
   // ----------------------------------------------------
