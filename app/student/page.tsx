@@ -16,7 +16,6 @@ interface LeaveRequest {
   createdAt: any;
 }
 
-// สร้าง Interface สำหรับเก็บข้อมูลนักเรียนที่ Login สำเร็จ
 interface StudentData {
   studentId: string;
   studentName: string;
@@ -31,9 +30,8 @@ export default function StudentPage() {
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
-  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false); // สถานะกำลังโหลดตอน Login
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
   
-  // เก็บข้อมูลนักเรียนที่ได้จาก Database หลัง Login สำเร็จ
   const [currentStudent, setCurrentStudent] = useState<StudentData | null>(null);
   
   // ==========================================
@@ -47,7 +45,7 @@ export default function StudentPage() {
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
 
   // ----------------------------------------------------
-  // ฟังก์ชัน Login (เชื่อมต่อกับ Firestore Collection: Students)
+  // ฟังก์ชัน Login
   // ----------------------------------------------------
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -60,16 +58,12 @@ export default function StudentPage() {
     setLoginError('');
 
     try {
-      // ค้นหาข้อมูลนักเรียนจาก Document ID (รหัสนักเรียน)
       const studentDocRef = doc(db, "Students", username.trim());
       const studentDoc = await getDoc(studentDocRef);
 
       if (studentDoc.exists()) {
         const data = studentDoc.data();
-        
-        // ตรวจสอบรหัสผ่าน
         if (data.password === password) {
-          // Login สำเร็จ บันทึกข้อมูลนักเรียนลง State
           setCurrentStudent({
             studentId: username,
             studentName: data.studentName || 'ไม่ระบุชื่อ',
@@ -91,6 +85,18 @@ export default function StudentPage() {
   };
 
   // ----------------------------------------------------
+  // ฟังก์ชัน Logout
+  // ----------------------------------------------------
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUsername('');
+    setPassword('');
+    setCurrentStudent(null);
+    setMyRequests([]);
+    setShowForm(false);
+  };
+
+  // ----------------------------------------------------
   // ดึงข้อมูลคำร้องแบบ Real-time
   // ----------------------------------------------------
   useEffect(() => {
@@ -100,6 +106,7 @@ export default function StudentPage() {
       const reqs: LeaveRequest[] = [];
       snapshot.forEach((doc) => reqs.push({ id: doc.id, ...doc.data() } as LeaveRequest));
       
+      // เรียงลำดับจากวันที่ล่าสุดลงไป
       reqs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setMyRequests(reqs);
     });
@@ -107,7 +114,7 @@ export default function StudentPage() {
   }, [isLoggedIn, currentStudent]);
 
   // ----------------------------------------------------
-  // ฟังก์ชันส่งคำร้อง (ใช้ข้อมูลจริงจาก Database)
+  // ฟังก์ชันส่งคำร้อง
   // ----------------------------------------------------
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -120,9 +127,9 @@ export default function StudentPage() {
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, "LeaveRequests"), {
-        studentName: currentStudent.studentName, // ใช้ชื่อจริงจาก DB
+        studentName: currentStudent.studentName,
         studentId: currentStudent.studentId,                
-        classroom: currentStudent.classroom,     // ใช้ชั้นเรียนจริงจาก DB
+        classroom: currentStudent.classroom,     
         leaveType: leaveType,
         reason: reason,
         status: "pending", 
@@ -153,7 +160,7 @@ export default function StudentPage() {
   };
 
   // ----------------------------------------------------
-  // Helper functions
+  // Helper Functions & Date Checking
   // ----------------------------------------------------
   const downloadQRCode = (requestId: string) => {
     const canvas = document.getElementById(`qr-${requestId}`) as HTMLCanvasElement;
@@ -172,10 +179,22 @@ export default function StudentPage() {
     }) + ' น.';
   };
 
+  // ฟังก์ชันตรวจสอบว่าเป็น "วันเดียวกันกับวันนี้" หรือไม่
+  const isToday = (timestamp: any) => {
+    if (!timestamp || !timestamp.toDate) return false;
+    const reqDate = timestamp.toDate();
+    const today = new Date();
+    return reqDate.getDate() === today.getDate() &&
+      reqDate.getMonth() === today.getMonth() &&
+      reqDate.getFullYear() === today.getFullYear();
+  };
+
   const totalRequests = myRequests.length;
   const approvedCount = myRequests.filter(req => req.status === 'approved').length;
   const rejectedCount = myRequests.filter(req => req.status === 'rejected').length;
-  const latestApproved = myRequests.find(req => req.status === 'approved');
+  
+  // ค้นหาคำร้องที่อนุมัติแล้ว *เฉพาะที่เป็นของวันนี้เท่านั้น*
+  const latestApprovedToday = myRequests.find(req => req.status === 'approved' && isToday(req.createdAt));
 
   // ==========================================
   // UI - หน้า Login
@@ -185,7 +204,6 @@ export default function StudentPage() {
       <div className="min-h-screen bg-sky-50 flex items-center justify-center p-5 font-sans">
         <form onSubmit={handleLogin} className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm flex flex-col gap-4 border-t-8 border-blue-600 relative overflow-hidden">
           
-          {/* สถานะกำลังโหลด Login (แสดงตอนดึงข้อมูลจาก DB) */}
           {isLoggingIn && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-10">
               <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3"></div>
@@ -217,39 +235,51 @@ export default function StudentPage() {
   // UI - หน้าหลักนักเรียน
   // ==========================================
   return (
-    <div className="min-h-screen bg-slate-100 pb-10 font-sans">
-      <div className="bg-blue-600 text-white pt-12 pb-6 px-5 rounded-b-3xl shadow-md">
-        <div className="flex justify-between items-center mb-4">
+    <div className="min-h-screen bg-slate-100 pb-10 font-sans relative">
+      
+      {/* Header พร้อมปุ่ม Log out มุมขวาบน */}
+      <div className="bg-blue-600 text-white pt-10 pb-12 px-5 rounded-b-3xl shadow-md relative">
+        
+        {/* 🔴 ปุ่มออกจากระบบ มุมขวาบน */}
+        <button 
+          onClick={handleLogout}
+          className="absolute top-5 right-5 text-blue-100 hover:text-white text-xs font-semibold bg-white/10 hover:bg-white/20 py-2 px-3.5 rounded-xl transition backdrop-blur-sm flex items-center gap-1.5 border border-white/20"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          ออกจากระบบ
+        </button>
+
+        <div className="flex justify-between items-center pr-28">
           <div>
             <h1 className="text-xl font-bold">MRW E-Pass</h1>
             <p className="text-blue-100 text-sm mt-1">{currentStudent?.studentName} ({currentStudent?.classroom})</p>
             <p className="text-blue-200 text-xs">รหัส: {currentStudent?.studentId}</p>
           </div>
-          <div className="w-14 h-14 bg-white/20 text-white rounded-full flex items-center justify-center font-bold text-2xl shadow-sm border border-white/40">
-            {currentStudent?.studentName.charAt(0) || 'ส'}
-          </div>
         </div>
       </div>
 
-      <div className="p-5 -mt-6 relative z-10 max-w-md mx-auto">
+      <div className="p-5 -mt-6 relative z-10 max-w-lg mx-auto">
         
-        {!showForm && latestApproved && (
+        {/* แสดง QR Code เฉพาะเมื่อได้รับการอนุมัติ และ ต้องเป็นวันที่ปัจจุบันเท่านั้น */}
+        {!showForm && latestApprovedToday && (
           <div className="bg-white rounded-3xl shadow-xl border-t-8 border-green-500 overflow-hidden mb-6 animate-fade-in">
             <div className="p-6 bg-slate-50 flex flex-col items-center justify-center text-center">
               <span className="inline-block bg-green-100 text-green-700 px-4 py-1 rounded-full text-xs font-bold mb-3 shadow-sm">
-                อนุมัติล่าสุด (Active E-Pass)
+                อนุมัติวันนี้ (Active E-Pass)
               </span>
-              <h2 className="text-xl font-bold text-slate-800">{latestApproved.leaveType}</h2>
-              <p className="text-slate-500 text-xs mt-1 mb-4">อนุมัติเมื่อ: {formatDate(latestApproved.createdAt)}</p>
+              <h2 className="text-xl font-bold text-slate-800">{latestApprovedToday.leaveType}</h2>
+              <p className="text-slate-500 text-xs mt-1 mb-4">อนุมัติเมื่อ: {formatDate(latestApprovedToday.createdAt)}</p>
               
               <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
-                <QRCodeCanvas id={`qr-${latestApproved.id}`} value={`MRW-PASS:${latestApproved.id}`} size={160} level={"H"} />
+                <QRCodeCanvas id={`qr-${latestApprovedToday.id}`} value={`MRW-PASS:${latestApprovedToday.id}`} size={160} level={"H"} />
               </div>
               
               <p className="text-xs text-slate-400 mt-4 font-medium px-4">
                 แสดง QR Code นี้ให้เจ้าหน้าที่รักษาความปลอดภัย ณ ประตูทางออก
               </p>
-              <button onClick={() => downloadQRCode(latestApproved.id)} className="mt-3 text-sm text-blue-600 font-semibold hover:underline">
+              <button onClick={() => downloadQRCode(latestApprovedToday.id)} className="mt-3 text-sm text-blue-600 font-semibold hover:underline">
                 ดาวน์โหลด QR Code
               </button>
             </div>
@@ -308,45 +338,74 @@ export default function StudentPage() {
           </div>
         ) : (
           <>
-            <h4 className="text-sm font-bold text-slate-700 mb-3">ประวัติการขออนุญาต</h4>
-            
-            {myRequests.length === 0 ? (
-              <p className="text-center text-slate-400 text-sm py-4 bg-white rounded-xl">ยังไม่มีประวัติการขออนุญาต</p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {myRequests.map((req) => (
-                  <div key={req.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
-                    <div className="flex flex-col w-2/3">
-                      <p className="text-sm font-bold text-slate-800 truncate">{req.leaveType}</p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{formatDate(req.createdAt)}</p>
-                      <p className="text-xs text-slate-500 mt-1 truncate">{req.reason}</p>
-                    </div>
-                    <div>
-                      {req.status === 'pending' && <span className="bg-yellow-100 text-yellow-700 text-[10px] px-2 py-1 rounded-md font-bold">รออนุมัติ</span>}
-                      {req.status === 'rejected' && <span className="bg-red-100 text-red-600 text-[10px] px-2 py-1 rounded-md font-bold">ไม่อนุมัติ</span>}
-                      {req.status === 'approved' && <span className="bg-green-100 text-green-700 text-[10px] px-2 py-1 rounded-md font-bold">อนุมัติแล้ว</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* รายละเอียดประวัติการขออนุญาต (รูปแบบตาราง เรียงจากวันที่ล่าสุด) */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+              <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span>📋</span> ประวัติการขออนุญาต
+              </h4>
+              
+              {myRequests.length === 0 ? (
+                <p className="text-center text-slate-400 text-xs py-6">ยังไม่มีประวัติการขออนุญาต</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+                        <th className="pb-2">วันที่ / เวลา</th>
+                        <th className="pb-2">ประเภท</th>
+                        <th className="pb-2">เหตุผล</th>
+                        <th className="pb-2 text-right">สถานะ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-xs">
+                      {myRequests.map((req) => {
+                        const isReqToday = isToday(req.createdAt);
+                        return (
+                          <tr key={req.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-3 pr-2 text-slate-500 whitespace-nowrap font-medium text-[11px]">
+                              {formatDate(req.createdAt)}
+                            </td>
+                            <td className="py-3 px-1 font-semibold text-slate-800 whitespace-nowrap">
+                              {req.leaveType}
+                            </td>
+                            <td className="py-3 px-1 text-slate-600 max-w-[120px] truncate">
+                              {req.reason}
+                            </td>
+                            <td className="py-3 pl-2 text-right whitespace-nowrap">
+                              {req.status === 'pending' && (
+                                <span className="bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                  รออนุมัติ
+                                </span>
+                              )}
+                              {req.status === 'rejected' && (
+                                <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                  ไม่อนุมัติ
+                                </span>
+                              )}
+                              {req.status === 'approved' && (
+                                isReqToday ? (
+                                  <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    อนุมัติแล้ว
+                                  </span>
+                                ) : (
+                                  <span className="bg-slate-100 text-slate-500 text-[10px] px-2 py-0.5 rounded-full font-medium" title="หมดอายุ (สแกนได้เฉพาะวันที่ขออนุมัติ)">
+                                    หมดอายุ
+                                  </span>
+                                )
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </>
         )}
-        
-        <button 
-          onClick={() => {
-            setIsLoggedIn(false);
-            setUsername('');
-            setPassword('');
-            setCurrentStudent(null);
-            setMyRequests([]);
-          }}
-          className="w-full mt-8 text-slate-400 hover:text-red-500 text-sm font-medium py-2 transition"
-        >
-          ออกจากระบบ (Logout)
-        </button>
 
       </div>
     </div>
   );
-}
+}ื
