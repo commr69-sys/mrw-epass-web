@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
-import { doc, getDoc } from "firebase/firestore";
+// เพิ่ม collection, addDoc, serverTimestamp สำหรับการเขียนข้อมูลลงฐานข้อมูล
+import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from '../lib/firebase';
-import { useZxing } from "react-zxing"; // นำเข้าไลบรารีเปิดกล้องสแกน QR Code
+import { useZxing } from "react-zxing"; 
 
 // กำหนดโครงสร้างข้อมูลที่ดึงมาจาก Firebase
 interface LeaveRequest {
@@ -14,7 +15,7 @@ interface LeaveRequest {
   leaveType: string;
   status: string;
   approvedBy?: string;
-  approvedAt?: any; // Firestore Timestamp
+  approvedAt?: any; 
 }
 
 export default function GuardPage() {
@@ -29,11 +30,11 @@ export default function GuardPage() {
   // ==========================================
   // States: ระบบสแกนและผลลัพธ์
   // ==========================================
-  const [isScanning, setIsScanning] = useState<boolean>(true); // ควบคุมการเปิด/ปิดกล้อง
-  const [isLoading, setIsLoading] = useState<boolean>(false); // สถานะกำลังดึงข้อมูล
+  const [isScanning, setIsScanning] = useState<boolean>(true); 
+  const [isLoading, setIsLoading] = useState<boolean>(false); 
   const [studentData, setStudentData] = useState<LeaveRequest | null>(null);
   const [scanError, setScanError] = useState<string>('');
-  
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false); // เพิ่ม State เช็คว่าบันทึกลง DB สำเร็จไหม
 
   // ----------------------------------------------------
   // ฟังก์ชัน Login
@@ -43,7 +44,7 @@ export default function GuardPage() {
     if (username === 'guard' && password === '1234') {
       setIsLoggedIn(true);
       setLoginError('');
-      setIsScanning(true); // Login ปุ๊บ เปิดกล้องทันที
+      setIsScanning(true);
     } else {
       setLoginError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
@@ -53,45 +54,56 @@ export default function GuardPage() {
   // ฟังก์ชันตั้งค่ากล้องสแกน QR Code (react-zxing)
   // ----------------------------------------------------
   const { ref } = useZxing({
-    paused: !isScanning, // หยุดกล้องชั่วคราวเมื่อไม่ได้อยู่หน้าสแกน
-  onDecodeResult(result: any) {
-  // ใช้ any เพื่อข้าม Type check และเผื่อทางเลือกรับค่าทั้งแบบ .text และ .getText()
-  const scannedText = result?.text || (result.getText ? result.getText() : result);
-  handleScanResult(scannedText);
-},
+    paused: !isScanning,
+    onDecodeResult(result: any) {
+      const scannedText = result?.text || (result.getText ? result.getText() : result);
+      handleScanResult(scannedText);
+    },
   });
 
   // ----------------------------------------------------
   // ฟังก์ชันประมวลผลหลังสแกนเจอ QR Code
   // ----------------------------------------------------
   const handleScanResult = async (scannedText: string) => {
-    // 1. ปิดกล้องทันทีเพื่อไม่ให้สแกนซ้ำรัวๆ
     setIsScanning(false);
     setIsLoading(true);
     setScanError('');
+    setSaveSuccess(false);
 
     try {
-      // 2. เช็คว่ารูปแบบ QR Code ถูกต้องหรือไม่ (ต้องขึ้นต้นด้วย MRW-PASS:)
       if (!scannedText.startsWith("MRW-PASS:")) {
         setScanError("QR Code ไม่ใช่ของระบบ MRW E-Pass");
         setIsLoading(false);
         return;
       }
 
-      // 3. ตัดเอาเฉพาะ ID ของคำร้องออกมา
       const requestId = scannedText.split(":")[1];
-
-      // 4. ดึงข้อมูลจาก Firestore ด้วย ID
       const docRef = doc(db, "LeaveRequests", requestId);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        setStudentData({ id: docSnap.id, ...docSnap.data() } as LeaveRequest);
+        const data = docSnap.data() as LeaveRequest;
+        setStudentData({ id: docSnap.id, ...data });
+
+        // ✅ เพิ่มระบบ: ถ้าคำร้องถูกอนุมัติ ให้บันทึกเวลาและข้อมูลลงฐานข้อมูล (Collection: ScanLogs)
+        if (data.status === 'approved') {
+          await addDoc(collection(db, "ScanLogs"), {
+            requestId: docSnap.id,
+            studentName: data.studentName,
+            studentId: data.studentId,
+            classroom: data.classroom,
+            leaveType: data.leaveType,
+            action: "Scanned at Gate", // ระบุว่าเป็นการสแกนผ่านประตู
+            scannedAt: serverTimestamp(), // ฟังก์ชันบันทึกเวลาปัจจุบันของ Firebase อัตโนมัติ
+            scannedBy: "Guard" // อาจจะใช้ username ของยามที่ล็อกอินอยู่
+          });
+          setSaveSuccess(true); // บันทึกสำเร็จ
+        }
       } else {
         setScanError("ไม่พบข้อมูลคำร้องนี้ในระบบ (เอกสารอาจถูกลบ)");
       }
     } catch (error) {
-      console.error("Error fetching request:", error);
+      console.error("Error processing scan:", error);
       setScanError("เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล");
     } finally {
       setIsLoading(false);
@@ -104,15 +116,17 @@ export default function GuardPage() {
   const handleScanNext = () => {
     setStudentData(null);
     setScanError('');
-    setIsScanning(true); // เปิดกล้องใหม่
+    setSaveSuccess(false);
+    setIsScanning(true); 
   };
 
   // ==========================================
-  // UI - หน้าจอ Login
+  // UI - หน้าจอ Login (เหมือนเดิม)
   // ==========================================
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-5 font-sans">
+        {/* โค้ดส่วน Login เหมือนเดิม */}
         <div className="w-full max-w-sm bg-slate-800 rounded-3xl shadow-2xl p-8 border-t-4 border-blue-500">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-slate-700 text-blue-400 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">🛡️</div>
@@ -153,11 +167,10 @@ export default function GuardPage() {
             <p className="text-slate-400 mt-1">ให้นักเรียนแสดงใบผ่านทาง E-Passport</p>
           </div>
           
+          {/* กรอบสแกนออกแบบให้รองรับมือถือแนวตั้ง */}
           <div className="w-full aspect-[4/5] bg-black rounded-3xl overflow-hidden relative shadow-2xl border-4 border-slate-800">
-            {/* กล้องจะแสดงตรงนี้ */}
-            <video ref={ref} className="w-full h-full object-cover" />
+            <video ref={ref} className="w-full h-full object-cover" playsInline />
             
-            {/* กรอบเล็ง QR Code (UI ตกแต่ง) */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center border-[40px] border-slate-900/60">
               <div className="w-full h-full border-2 border-blue-500/50 rounded-xl relative">
                  <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 -mt-1 -ml-1 rounded-tl-lg"></div>
@@ -205,7 +218,7 @@ export default function GuardPage() {
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-bounce" style={{ animationIterationCount: 1 }}>
           
           {/* Header สีเปลี่ยนตามสถานะ */}
-          <div className={`${studentData.status === 'approved' ? 'bg-green-500' : 'bg-red-500'} p-8 text-center text-white`}>
+          <div className={`${studentData.status === 'approved' ? 'bg-green-500' : 'bg-red-500'} p-8 text-center text-white relative`}>
             <div className="w-20 h-20 mx-auto bg-white rounded-full flex items-center justify-center mb-4 shadow-inner">
               {studentData.status === 'approved' ? (
                 <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
@@ -216,9 +229,16 @@ export default function GuardPage() {
             <h2 className="text-3xl font-bold">
               {studentData.status === 'approved' ? 'ผ่านได้ !' : 'ไม่อนุญาต !'}
             </h2>
-            <p className="text-white/80 mt-1 font-medium text-sm">
+            <p className="text-white/90 mt-1 font-medium text-sm">
               {studentData.status === 'approved' ? 'ข้อมูลถูกต้องและได้รับการอนุมัติ' : 'คำร้องนี้ยังไม่ได้รับการอนุมัติ'}
             </p>
+            
+            {/* แสดงข้อความเมื่อบันทึกลงฐานข้อมูลสำเร็จ */}
+            {saveSuccess && (
+              <div className="mt-3 bg-green-700/40 py-1.5 px-4 rounded-full inline-block text-xs font-semibold backdrop-blur-sm border border-green-400/30">
+                ✅ บันทึกเวลาเข้า-ออกเรียบร้อยแล้ว
+              </div>
+            )}
           </div>
           
           {/* ข้อมูลนักเรียน */}
@@ -244,7 +264,7 @@ export default function GuardPage() {
           </div>
           
           <div className="p-4 bg-slate-50">
-            <button onClick={handleScanNext} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-700 transition">
+            <button onClick={handleScanNext} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-700 transition shadow-md">
               สแกนคิวอาร์โค้ดต่อไป
             </button>
           </div>

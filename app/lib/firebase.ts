@@ -5,7 +5,7 @@ import { getAuth, Auth } from "firebase/auth";
 // 1. ดึงค่า Config มาจากไฟล์ .env.local พร้อมบังคับ Type ให้เป็น string
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAGfcIMK58LdiCGR0f43hoVMJAZ6VHYcrE",
+  apiKey: "git add .",
   authDomain: "mrtestdb.firebaseapp.com",
   projectId: "mrtestdb",
   storageBucket: "mrtestdb.firebasestorage.app",
