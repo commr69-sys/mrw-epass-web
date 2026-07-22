@@ -79,7 +79,16 @@ export default function GuardPage() {
         return;
       }
 
-      const requestId = scannedText.split(":")[1];
+      // ดึง ID ออกมาและตัดช่องว่าง (space) ที่อาจติดมาโดยไม่ได้ตั้งใจ
+      const requestId = scannedText.split(":")[1]?.trim();
+
+      if (!requestId) {
+        setScanError("รูปแบบ QR Code ไม่สมบูรณ์ (ไม่พบ ID)");
+        setIsLoading(false);
+        return;
+      }
+
+      // ดึงข้อมูลคำร้อง
       const docRef = doc(db, "LeaveRequests", requestId);
       const docSnap = await getDoc(docRef);
 
@@ -87,25 +96,27 @@ export default function GuardPage() {
         const data = docSnap.data() as LeaveRequest;
         setStudentData({ id: docSnap.id, ...data });
 
+        // บันทึก Log การสแกน
         if (data.status === 'approved') {
           await addDoc(collection(db, "ScanLogs"), {
             requestId: docSnap.id,
-            studentName: data.studentName,
-            studentId: data.studentId,
-            classroom: data.classroom,
-            leaveType: data.leaveType,
-            action: "Scanned at Gate", 
-            scannedAt: serverTimestamp(), 
-            scannedBy: "Guard" 
+            studentName: data.studentName || "ไม่ระบุ",
+            studentId: data.studentId || "ไม่ระบุ",
+            classroom: data.classroom || "ไม่ระบุ",
+            leaveType: data.leaveType || "ไม่ระบุ",
+            action: "Scanned at Gate",
+            scannedAt: serverTimestamp(),
+            scannedBy: username || "Guard"
           });
           setSaveSuccess(true); 
         }
       } else {
         setScanError("ไม่พบข้อมูลคำร้องนี้ในระบบ (เอกสารอาจถูกลบ)");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error processing scan:", error);
-      setScanError("เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล");
+      // ✅ แสดง Error ที่แท้จริงจาก Firebase บนหน้าจอสีแดง
+      setScanError(`เชื่อมต่อล้มเหลว: ${error.message || "Unknown Error"}`);
     } finally {
       setIsLoading(false);
     }
