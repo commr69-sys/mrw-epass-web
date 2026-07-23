@@ -28,7 +28,6 @@ export default function GuardPage() {
   // ==========================================
   // States: ระบบสแกนและผลลัพธ์
   // ==========================================
-  // ✅ แก้ไข: เปลี่ยนค่าเริ่มต้นเป็น false เพื่อไม่ให้กล้องทำงานตอนอยู่หน้า Login
   const [isScanning, setIsScanning] = useState<boolean>(false); 
   const [isLoading, setIsLoading] = useState<boolean>(false); 
   const [studentData, setStudentData] = useState<LeaveRequest | null>(null);
@@ -43,7 +42,7 @@ export default function GuardPage() {
     if (username === 'guard' && password === '1234') {
       setIsLoggedIn(true);
       setLoginError('');
-      setIsScanning(true); // เปิดกล้องเมื่อล็อกอินผ่าน
+      setIsScanning(true);
     } else {
       setLoginError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
@@ -53,34 +52,55 @@ export default function GuardPage() {
   // ฟังก์ชันตั้งค่ากล้องสแกน QR Code
   // ----------------------------------------------------
   const { ref } = useZxing({
-    // ✅ แก้ไข: บังคับหยุดกล้องถ้ายังไม่ได้ล็อกอิน หรือ isScanning เป็น false
     paused: !isScanning || !isLoggedIn, 
-    // ✅ เพิ่มเติม: บังคับให้ใช้กล้องหลังของมือถือเสมอ
     constraints: { video: { facingMode: "environment" } },
     onDecodeResult(result: any) {
-      const scannedText = result?.text || (result.getText ? result.getText() : result);
-      handleScanResult(scannedText);
+      // ✅ ดึงข้อความจาก QR Code อย่างปลอดภัยที่สุด ไม่ให้หลุดเป็น Object เด็ดขาด
+      let extractedText = "";
+      
+      if (result) {
+        if (typeof result.getText === 'function') {
+          extractedText = result.getText();
+        } else if (result.text && typeof result.text === 'string') {
+          extractedText = result.text;
+        } else if (typeof result === 'string') {
+          extractedText = result;
+        } else {
+          extractedText = String(result);
+        }
+      }
+      
+      handleScanResult(extractedText);
     },
   });
 
   // ----------------------------------------------------
   // ฟังก์ชันประมวลผลหลังสแกนเจอ QR Code
   // ----------------------------------------------------
-  const handleScanResult = async (scannedText: string) => {
+  const handleScanResult = async (scannedText: any) => {
     setIsScanning(false);
     setIsLoading(true);
     setScanError('');
     setSaveSuccess(false);
 
     try {
-      if (!scannedText.startsWith("MRW-PASS:")) {
+      // ✅ บังคับแปลงเป็น String อีกชั้น และตัดช่องว่าง ป้องกัน Error: startsWith is not a function
+      const safeText = String(scannedText || "").trim();
+
+      if (!safeText) {
+        setScanError("สแกนไม่สำเร็จ: ไม่พบข้อมูลใน QR Code");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!safeText.startsWith("MRW-PASS:")) {
         setScanError("QR Code ไม่ใช่ของระบบ MRW E-Pass");
         setIsLoading(false);
         return;
       }
 
-      // ดึง ID ออกมาและตัดช่องว่าง (space) ที่อาจติดมาโดยไม่ได้ตั้งใจ
-      const requestId = scannedText.split(":")[1]?.trim();
+      // ดึง ID ออกมา
+      const requestId = safeText.split(":")[1]?.trim();
 
       if (!requestId) {
         setScanError("รูปแบบ QR Code ไม่สมบูรณ์ (ไม่พบ ID)");
@@ -88,7 +108,6 @@ export default function GuardPage() {
         return;
       }
 
-      // ดึงข้อมูลคำร้อง
       const docRef = doc(db, "LeaveRequests", requestId);
       const docSnap = await getDoc(docRef);
 
@@ -96,7 +115,6 @@ export default function GuardPage() {
         const data = docSnap.data() as LeaveRequest;
         setStudentData({ id: docSnap.id, ...data });
 
-        // บันทึก Log การสแกน
         if (data.status === 'approved') {
           await addDoc(collection(db, "ScanLogs"), {
             requestId: docSnap.id,
@@ -104,9 +122,9 @@ export default function GuardPage() {
             studentId: data.studentId || "ไม่ระบุ",
             classroom: data.classroom || "ไม่ระบุ",
             leaveType: data.leaveType || "ไม่ระบุ",
-            action: "Scanned at Gate",
-            scannedAt: serverTimestamp(),
-            scannedBy: username || "Guard"
+            action: "Scanned at Gate", 
+            scannedAt: serverTimestamp(), 
+            scannedBy: username || "Guard" 
           });
           setSaveSuccess(true); 
         }
@@ -115,8 +133,7 @@ export default function GuardPage() {
       }
     } catch (error: any) {
       console.error("Error processing scan:", error);
-      // ✅ แสดง Error ที่แท้จริงจาก Firebase บนหน้าจอสีแดง
-      setScanError(`เชื่อมต่อล้มเหลว: ${error.message || "Unknown Error"}`);
+      setScanError(`เชื่อมต่อล้มเหลว: ${error?.message || "ไม่ทราบสาเหตุ"}`);
     } finally {
       setIsLoading(false);
     }
@@ -129,14 +146,9 @@ export default function GuardPage() {
     setIsScanning(true); 
   };
 
-  // ✅ แก้ไข: รวบ UI ให้อยู่ใน Return เดียวกันทั้งหมด 
-  // เพื่อให้ React รู้จักแท็กวิดีโอตั้งแต่แรกและไม่ข้ามการทำงานของไลบรารีสแกน
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-5 relative font-sans">
       
-      {/* ============================== */}
-      {/* โหมดที่ 1: หน้าจอ Login (ยังไม่ได้ล็อกอิน) */}
-      {/* ============================== */}
       {!isLoggedIn ? (
         <div className="w-full max-w-sm bg-slate-800 rounded-3xl shadow-2xl p-8 border-t-4 border-blue-500">
           <div className="text-center mb-8">
@@ -153,9 +165,6 @@ export default function GuardPage() {
           </form>
         </div>
       ) : (
-        /* ============================== */
-        /* โหมดที่ 2: หน้าจอหลัก (ล็อกอินแล้ว) */
-        /* ============================== */
         <>
           <button 
             onClick={() => { setIsLoggedIn(false); setIsScanning(false); }}
@@ -164,7 +173,6 @@ export default function GuardPage() {
             ออกจากระบบ
           </button>
 
-          {/* กำลังสแกน (กล้อง) */}
           {isScanning && (
             <div className="w-full max-w-sm flex flex-col items-center">
               <div className="text-center mb-6">
@@ -186,7 +194,6 @@ export default function GuardPage() {
             </div>
           )}
 
-          {/* กำลังโหลดข้อมูล (Loading) */}
           {isLoading && (
             <div className="text-center text-white">
               <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -194,7 +201,6 @@ export default function GuardPage() {
             </div>
           )}
 
-          {/* ข้อผิดพลาด (QR ปลอม / ไม่พบข้อมูล / ไม่อนุญาต) */}
           {scanError && !isLoading && (
             <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-fade-in">
               <div className="bg-red-500 p-8 text-center text-white">
@@ -210,7 +216,6 @@ export default function GuardPage() {
             </div>
           )}
 
-          {/* แสดงผลสำเร็จ (เจอข้อมูลนักเรียน) */}
           {studentData && !isLoading && !scanError && (
             <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden animate-bounce" style={{ animationIterationCount: 1 }}>
               
