@@ -40,6 +40,7 @@ export default function GuardPage() {
     }
   };
 
+  
   const { ref } = useZxing({
     paused: !isScanning || !isLoggedIn, 
     constraints: { video: { facingMode: "environment" } },
