@@ -17,26 +17,18 @@ interface LeaveRequest {
 }
 
 export default function GuardPage() {
-  // ==========================================
-  // States: ระบบ Login
-  // ==========================================
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loginError, setLoginError] = useState<string>('');
 
-  // ==========================================
-  // States: ระบบสแกนและผลลัพธ์
-  // ==========================================
   const [isScanning, setIsScanning] = useState<boolean>(false); 
   const [isLoading, setIsLoading] = useState<boolean>(false); 
   const [studentData, setStudentData] = useState<LeaveRequest | null>(null);
   const [scanError, setScanError] = useState<string>('');
+  const [errorTitle, setErrorTitle] = useState<string>('ไม่อนุญาต !'); // เพิ่ม State แยก Title
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false); 
 
-  // ----------------------------------------------------
-  // ฟังก์ชัน Login
-  // ----------------------------------------------------
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (username === 'guard' && password === '1234') {
@@ -48,38 +40,53 @@ export default function GuardPage() {
     }
   };
 
-// ----------------------------------------------------
-  // ฟังก์ชันประมวลผลหลังสแกนเจอ QR Code
-  // ----------------------------------------------------
-  const handleScanResult = async (scannedText: any) => {
+  const { ref } = useZxing({
+    paused: !isScanning || !isLoggedIn, 
+    constraints: { video: { facingMode: "environment" } },
+    onDecodeResult(result) {
+      try {
+        // ใช้มาตรฐานของไลบรารีในการดึงข้อความ
+        const text = result.getText();
+        handleScanResult(text);
+      } catch (err) {
+        // สำรองเผื่อกรณี object ผิดปกติ
+        handleScanResult(String(result));
+      }
+    },
+  });
+
+  const handleScanResult = async (scannedText: string) => {
     setIsScanning(false);
     setIsLoading(true);
     setScanError('');
+    setErrorTitle('ไม่อนุญาต !');
     setSaveSuccess(false);
 
     try {
-      // บังคับแปลงเป็น String อีกชั้น และตัดช่องว่างซ้ายขวาทิ้ง
-      const safeText = String(scannedText || "").trim();
+      const safeText = scannedText ? scannedText.trim() : "";
 
+      // เช็คว่าอ่านค่าได้หรือไม่
       if (!safeText) {
-        setScanError("สแกนไม่สำเร็จ: ไม่พบข้อมูลใน QR Code");
+        setErrorTitle("สแกนล้มเหลว");
+        setScanError("กล้องไม่สามารถอ่านข้อมูลจาก QR Code ได้");
         setIsLoading(false);
         return;
       }
 
-      // ✅ แก้ไข 1: เปลี่ยนจาก .startsWith เป็น .includes เพื่อความยืดหยุ่น
-      // ✅ แก้ไข 2: แสดงค่าที่กล้องอ่านได้จริงๆ ออกมา เพื่อช่วยดีบัก
+      // เช็คว่าเป็น QR ของระบบเราไหม
       if (!safeText.includes("MRW-PASS:")) {
-        setScanError(`ไม่ใช่ QR ของระบบ (อ่านค่าได้: ${safeText.substring(0, 30)})`);
+        setErrorTitle("QR Code ผิดรูปแบบ");
+        // แสดงค่าที่อ่านได้จริงๆ ออกมา 20 ตัวอักษร
+        setScanError(`ข้อมูลที่สแกนได้: ${safeText.substring(0, 20)}...`);
         setIsLoading(false);
         return;
       }
 
-      // ✅ แก้ไข 3: ตัดคำเพื่อดึงเฉพาะ ID ออกมาอย่างแม่นยำ
       const requestId = safeText.split("MRW-PASS:")[1]?.trim();
 
       if (!requestId) {
-        setScanError("รูปแบบ QR Code ไม่สมบูรณ์ (ไม่พบ ID)");
+        setErrorTitle("ข้อมูลไม่สมบูรณ์");
+        setScanError("พบรูปแบบ MRW-PASS แต่ไม่มีรหัสอ้างอิง");
         setIsLoading(false);
         return;
       }
@@ -105,11 +112,13 @@ export default function GuardPage() {
           setSaveSuccess(true); 
         }
       } else {
-        setScanError("ไม่พบข้อมูลคำร้องนี้ในระบบ (เอกสารอาจถูกลบ)");
+        setErrorTitle("ไม่พบข้อมูล");
+        setScanError(`ไม่พบรหัสคำร้อง [${requestId}] ในฐานข้อมูล (อาจถูกลบไปแล้ว)`);
       }
     } catch (error: any) {
       console.error("Error processing scan:", error);
-      setScanError(`เชื่อมต่อล้มเหลว: ${error?.message || "ไม่ทราบสาเหตุ"}`);
+      setErrorTitle("ระบบขัดข้อง");
+      setScanError(error?.message || "ไม่สามารถเชื่อมต่อฐานข้อมูลได้");
     } finally {
       setIsLoading(false);
     }
@@ -183,8 +192,8 @@ export default function GuardPage() {
                 <div className="w-20 h-20 mx-auto bg-white rounded-full flex items-center justify-center mb-4">
                   <span className="text-4xl">❌</span>
                 </div>
-                <h2 className="text-3xl font-bold">ไม่อนุญาต !</h2>
-                <p className="text-red-100 mt-1 font-medium text-sm">{scanError}</p>
+                <h2 className="text-3xl font-bold">{errorTitle}</h2>
+                <p className="text-red-100 mt-2 font-medium text-sm leading-relaxed">{scanError}</p>
               </div>
               <div className="p-4 bg-slate-50">
                 <button onClick={handleScanNext} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-700">สแกนใหม่</button>
