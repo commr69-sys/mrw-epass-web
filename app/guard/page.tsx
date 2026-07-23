@@ -48,33 +48,7 @@ export default function GuardPage() {
     }
   };
 
-  // ----------------------------------------------------
-  // ฟังก์ชันตั้งค่ากล้องสแกน QR Code
-  // ----------------------------------------------------
-  const { ref } = useZxing({
-    paused: !isScanning || !isLoggedIn, 
-    constraints: { video: { facingMode: "environment" } },
-    onDecodeResult(result: any) {
-      // ✅ ดึงข้อความจาก QR Code อย่างปลอดภัยที่สุด ไม่ให้หลุดเป็น Object เด็ดขาด
-      let extractedText = "";
-      
-      if (result) {
-        if (typeof result.getText === 'function') {
-          extractedText = result.getText();
-        } else if (result.text && typeof result.text === 'string') {
-          extractedText = result.text;
-        } else if (typeof result === 'string') {
-          extractedText = result;
-        } else {
-          extractedText = String(result);
-        }
-      }
-      
-      handleScanResult(extractedText);
-    },
-  });
-
-  // ----------------------------------------------------
+// ----------------------------------------------------
   // ฟังก์ชันประมวลผลหลังสแกนเจอ QR Code
   // ----------------------------------------------------
   const handleScanResult = async (scannedText: any) => {
@@ -84,7 +58,7 @@ export default function GuardPage() {
     setSaveSuccess(false);
 
     try {
-      // ✅ บังคับแปลงเป็น String อีกชั้น และตัดช่องว่าง ป้องกัน Error: startsWith is not a function
+      // บังคับแปลงเป็น String อีกชั้น และตัดช่องว่างซ้ายขวาทิ้ง
       const safeText = String(scannedText || "").trim();
 
       if (!safeText) {
@@ -93,14 +67,16 @@ export default function GuardPage() {
         return;
       }
 
-      if (!safeText.startsWith("MRW-PASS:")) {
-        setScanError("QR Code ไม่ใช่ของระบบ MRW E-Pass");
+      // ✅ แก้ไข 1: เปลี่ยนจาก .startsWith เป็น .includes เพื่อความยืดหยุ่น
+      // ✅ แก้ไข 2: แสดงค่าที่กล้องอ่านได้จริงๆ ออกมา เพื่อช่วยดีบัก
+      if (!safeText.includes("MRW-PASS:")) {
+        setScanError(`ไม่ใช่ QR ของระบบ (อ่านค่าได้: ${safeText.substring(0, 30)})`);
         setIsLoading(false);
         return;
       }
 
-      // ดึง ID ออกมา
-      const requestId = safeText.split(":")[1]?.trim();
+      // ✅ แก้ไข 3: ตัดคำเพื่อดึงเฉพาะ ID ออกมาอย่างแม่นยำ
+      const requestId = safeText.split("MRW-PASS:")[1]?.trim();
 
       if (!requestId) {
         setScanError("รูปแบบ QR Code ไม่สมบูรณ์ (ไม่พบ ID)");
