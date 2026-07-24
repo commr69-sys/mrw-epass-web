@@ -40,7 +40,6 @@ export default function GuardPage() {
     }
   };
 
-  
   const { ref } = useZxing({
     paused: !isScanning || !isLoggedIn, 
     constraints: { video: { facingMode: "environment" } },
@@ -226,7 +225,7 @@ export default function GuardPage() {
                   </div>
                 )}
               </div>
-              
+            
               <div className="p-6 text-center">
                 <h3 className="text-xl font-bold text-slate-800">{studentData.studentName}</h3>
                 <p className="text-slate-500 font-medium text-sm mb-2">{studentData.classroom} • {studentData.leaveType}</p>
