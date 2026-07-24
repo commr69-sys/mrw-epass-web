@@ -26,7 +26,7 @@ export default function GuardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false); 
   const [studentData, setStudentData] = useState<LeaveRequest | null>(null);
   const [scanError, setScanError] = useState<string>('');
-  const [errorTitle, setErrorTitle] = useState<string>('ไม่อนุญาต !'); // เพิ่ม State แยก Title
+  const [errorTitle, setErrorTitle] = useState<string>('ไม่อนุญาต !'); 
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false); 
 
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
@@ -43,15 +43,30 @@ export default function GuardPage() {
   const { ref } = useZxing({
     paused: !isScanning || !isLoggedIn, 
     constraints: { video: { facingMode: "environment" } },
-    onDecodeResult(result) {
-      try {
-        // ใช้มาตรฐานของไลบรารีในการดึงข้อความ
-        const text = result.getText();
-        handleScanResult(text);
-      } catch (err) {
-        // สำรองเผื่อกรณี object ผิดปกติ
-        handleScanResult(String(result));
+    onDecodeResult(result: any) {
+      // ✅ แก้ไขตรงนี้: เจาะเอาเฉพาะ "ข้อความ" ออกมาจากก้อน Object
+      let extractedText = "";
+
+      if (result) {
+        if (result.text && typeof result.text === 'string') {
+          extractedText = result.text; // ดึงจาก property .text โดยตรง
+        } else if (typeof result.getText === 'function') {
+          extractedText = result.getText(); // ดึงผ่านฟังก์ชัน (ถ้ามี)
+        } else if (typeof result === 'string') {
+          extractedText = result;
+        }
       }
+
+      // ถ้าดึงไม่ได้จริงๆ ให้แปลงเป็น JSON เพื่อดูโครงสร้าง (ช่วย Debug)
+      if (!extractedText || extractedText === "[object Object]") {
+        try {
+          extractedText = JSON.stringify(result);
+        } catch (e) {
+          extractedText = String(result);
+        }
+      }
+
+      handleScanResult(extractedText);
     },
   });
 
@@ -65,7 +80,6 @@ export default function GuardPage() {
     try {
       const safeText = scannedText ? scannedText.trim() : "";
 
-      // เช็คว่าอ่านค่าได้หรือไม่
       if (!safeText) {
         setErrorTitle("สแกนล้มเหลว");
         setScanError("กล้องไม่สามารถอ่านข้อมูลจาก QR Code ได้");
@@ -76,8 +90,8 @@ export default function GuardPage() {
       // เช็คว่าเป็น QR ของระบบเราไหม
       if (!safeText.includes("MRW-PASS:")) {
         setErrorTitle("QR Code ผิดรูปแบบ");
-        // แสดงค่าที่อ่านได้จริงๆ ออกมา 20 ตัวอักษร
-        setScanError(`ข้อมูลที่สแกนได้: ${safeText.substring(0, 20)}...`);
+        // โชว์ข้อความที่อ่านได้ 40 ตัวอักษร เพื่อให้รู้ว่าอ่านอะไรมาได้
+        setScanError(`ข้อมูลที่สแกนได้: ${safeText.substring(0, 40)}...`);
         setIsLoading(false);
         return;
       }
@@ -193,7 +207,7 @@ export default function GuardPage() {
                   <span className="text-4xl">❌</span>
                 </div>
                 <h2 className="text-3xl font-bold">{errorTitle}</h2>
-                <p className="text-red-100 mt-2 font-medium text-sm leading-relaxed">{scanError}</p>
+                <p className="text-red-100 mt-2 font-medium text-sm leading-relaxed break-all">{scanError}</p>
               </div>
               <div className="p-4 bg-slate-50">
                 <button onClick={handleScanNext} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-700">สแกนใหม่</button>
@@ -225,7 +239,7 @@ export default function GuardPage() {
                   </div>
                 )}
               </div>
-            
+              
               <div className="p-6 text-center">
                 <h3 className="text-xl font-bold text-slate-800">{studentData.studentName}</h3>
                 <p className="text-slate-500 font-medium text-sm mb-2">{studentData.classroom} • {studentData.leaveType}</p>
