@@ -44,25 +44,24 @@ export default function GuardPage() {
     paused: !isScanning || !isLoggedIn, 
     constraints: { video: { facingMode: "environment" } },
     onDecodeResult(result: any) {
-      // ✅ แก้ไขตรงนี้: เจาะเอาเฉพาะ "ข้อความ" ออกมาจากก้อน Object
       let extractedText = "";
 
       if (result) {
-        if (result.text && typeof result.text === 'string') {
-          extractedText = result.text; // ดึงจาก property .text โดยตรง
-        } else if (typeof result.getText === 'function') {
-          extractedText = result.getText(); // ดึงผ่านฟังก์ชัน (ถ้ามี)
-        } else if (typeof result === 'string') {
+        if (typeof result === 'string') {
           extractedText = result;
-        }
-      }
-
-      // ถ้าดึงไม่ได้จริงๆ ให้แปลงเป็น JSON เพื่อดูโครงสร้าง (ช่วย Debug)
-      if (!extractedText || extractedText === "[object Object]") {
-        try {
-          extractedText = JSON.stringify(result);
-        } catch (e) {
-          extractedText = String(result);
+        } else if (result.rawValue && typeof result.rawValue === 'string') {
+          // ✅ ดักจับ Format ของ Native BarcodeDetector (เคสที่เจอบนมือถือของคุณ)
+          extractedText = result.rawValue; 
+        } else if (result.text && typeof result.text === 'string') {
+          extractedText = result.text;
+        } else if (typeof result.getText === 'function') {
+          extractedText = result.getText();
+        } else {
+          try {
+            extractedText = JSON.stringify(result);
+          } catch (e) {
+            extractedText = String(result);
+          }
         }
       }
 
@@ -87,20 +86,24 @@ export default function GuardPage() {
         return;
       }
 
-      // เช็คว่าเป็น QR ของระบบเราไหม
       if (!safeText.includes("MRW-PASS:")) {
         setErrorTitle("QR Code ผิดรูปแบบ");
-        // โชว์ข้อความที่อ่านได้ 40 ตัวอักษร เพื่อให้รู้ว่าอ่านอะไรมาได้
         setScanError(`ข้อมูลที่สแกนได้: ${safeText.substring(0, 40)}...`);
         setIsLoading(false);
         return;
       }
 
-      const requestId = safeText.split("MRW-PASS:")[1]?.trim();
+      // ดึง ID ออกมา
+      let rawRequestId = safeText.split("MRW-PASS:")[1]?.trim();
+
+      // ✅ ไม้ตาย: ทำความสะอาด ID (ตัดปีกกา เครื่องหมายคำพูด หรือ Format JSON ที่ติดมาทิ้งไป)
+      // ดึงมาเฉพาะตัวอักษร a-z, A-Z และตัวเลข 0-9 ที่อยู่ติดกันเท่านั้น
+      const match = rawRequestId?.match(/^[a-zA-Z0-9_-]+/);
+      const requestId = match ? match[0] : "";
 
       if (!requestId) {
         setErrorTitle("ข้อมูลไม่สมบูรณ์");
-        setScanError("พบรูปแบบ MRW-PASS แต่ไม่มีรหัสอ้างอิง");
+        setScanError("พบรูปแบบ MRW-PASS แต่ไม่สามารถดึงรหัสอ้างอิงได้");
         setIsLoading(false);
         return;
       }
