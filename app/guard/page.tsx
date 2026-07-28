@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, addDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { db } from '../lib/firebase';
 import { useZxing } from "react-zxing"; 
 
@@ -14,6 +14,9 @@ interface LeaveRequest {
   status: string;
   approvedBy?: string;
   approvedAt?: any; 
+  actionAt?: any; // ✅ เพิ่ม Field actionAt ที่ส่งมาจากหน้า Teacher
+  createdAt?: any; 
+  isUsed?: boolean; 
 }
 
 export default function GuardPage() {
@@ -50,7 +53,6 @@ export default function GuardPage() {
         if (typeof result === 'string') {
           extractedText = result;
         } else if (result.rawValue && typeof result.rawValue === 'string') {
-          // ✅ ดักจับ Format ของ Native BarcodeDetector (เคสที่เจอบนมือถือของคุณ)
           extractedText = result.rawValue; 
         } else if (result.text && typeof result.text === 'string') {
           extractedText = result.text;
@@ -93,11 +95,7 @@ export default function GuardPage() {
         return;
       }
 
-      // ดึง ID ออกมา
       let rawRequestId = safeText.split("MRW-PASS:")[1]?.trim();
-
-      // ✅ ไม้ตาย: ทำความสะอาด ID (ตัดปีกกา เครื่องหมายคำพูด หรือ Format JSON ที่ติดมาทิ้งไป)
-      // ดึงมาเฉพาะตัวอักษร a-z, A-Z และตัวเลข 0-9 ที่อยู่ติดกันเท่านั้น
       const match = rawRequestId?.match(/^[a-zA-Z0-9_-]+/);
       const requestId = match ? match[0] : "";
 
@@ -113,9 +111,38 @@ export default function GuardPage() {
 
       if (docSnap.exists()) {
         const data = docSnap.data() as LeaveRequest;
+
+        // 1. ตรวจสอบว่า QR Code ถูกสแกนซ้ำ (ใช้งานไปแล้ว) หรือไม่
+        if (data.isUsed === true) {
+          setErrorTitle("ไม่ผ่าน !");
+          setScanError("QR Code นี้ถูกใช้งานไปแล้ว ไม่สามารถสแกนซ้ำได้");
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. ตรวจสอบเวลาว่าเกิน 24 ชั่วโมงหรือไม่ (รองรับทั้ง actionAt, approvedAt และ createdAt)
+        const requestTimestamp = data.actionAt || data.createdAt || data.approvedAt; 
+        if (requestTimestamp && typeof requestTimestamp.toDate === 'function') {
+          const reqTime = requestTimestamp.toDate().getTime(); 
+          const now = Date.now();
+          const hoursPassed = (now - reqTime) / (1000 * 60 * 60); 
+
+          if (hoursPassed > 24) {
+            setErrorTitle("ไม่ผ่าน !");
+            setScanError("QR code หมดเวลาแล้ว (สร้างมาเกิน 24 ชั่วโมง)");
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // หากผ่านเงื่อนไข นำข้อมูลมาเตรียมแสดงผล
         setStudentData({ id: docSnap.id, ...data });
 
         if (data.status === 'approved') {
+          await updateDoc(docRef, {
+            isUsed: true
+          });
+
           await addDoc(collection(db, "ScanLogs"), {
             requestId: docSnap.id,
             studentName: data.studentName || "ไม่ระบุ",
@@ -126,7 +153,11 @@ export default function GuardPage() {
             scannedAt: serverTimestamp(), 
             scannedBy: username || "Guard" 
           });
+          
           setSaveSuccess(true); 
+        } else {
+          setErrorTitle("ไม่อนุญาต !");
+          setScanError("คำร้องนี้ยังไม่ได้รับการอนุมัติ หรือถูกปฏิเสธ");
         }
       } else {
         setErrorTitle("ไม่พบข้อมูล");
@@ -148,6 +179,21 @@ export default function GuardPage() {
     setIsScanning(true); 
   };
 
+  // ✅ ฟังก์ชันช่วยแปลงเวลาให้แสดงผลถูกต้อง
+  const getApprovalTime = (data: LeaveRequest) => {
+    const timeData = data.actionAt || data.approvedAt;
+    if (!timeData) return '-';
+    
+    try {
+      if (typeof timeData.toDate === 'function') {
+        return timeData.toDate().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+      }
+      return new Date(timeData).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+    } catch (e) {
+      return '-';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-5 relative font-sans">
       
@@ -162,8 +208,23 @@ export default function GuardPage() {
           <form onSubmit={handleLogin} className="flex flex-col gap-5">
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้ (guard)" className="w-full bg-slate-900 border border-slate-700 text-white p-3.5 rounded-xl focus:outline-none focus:border-blue-500" />
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="รหัสผ่าน (1234)" className="w-full bg-slate-900 border border-slate-700 text-white p-3.5 rounded-xl focus:outline-none focus:border-blue-500" />
+            
             {loginError && <p className="text-red-400 text-sm text-center bg-red-900/30 p-2 rounded-lg">{loginError}</p>}
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition mt-2 shadow-lg shadow-blue-900/50">เข้าสู่ระบบ</button>
+            
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <a 
+                href="/" 
+                className="w-full bg-slate-700 text-slate-300 hover:text-white font-bold py-3.5 rounded-xl hover:bg-slate-600 transition flex items-center justify-center gap-1.5 text-sm shadow-lg"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                กลับหน้าหลัก
+              </a>
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold transition shadow-lg shadow-blue-900/50 text-sm">
+                เข้าสู่ระบบ
+              </button>
+            </div>
           </form>
         </div>
       ) : (
@@ -255,11 +316,8 @@ export default function GuardPage() {
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-slate-600">เวลาที่อนุมัติ:</p>
-                    <p>
-                      {studentData.approvedAt 
-                        ? studentData.approvedAt.toDate().toLocaleTimeString('th-TH') + ' น.' 
-                        : '-'}
-                    </p>
+                    {/* ✅ เรียกใช้งานฟังก์ชันที่สร้างไว้ด้านบน */}
+                    <p>{getApprovalTime(studentData)}</p>
                   </div>
                 </div>
               </div>

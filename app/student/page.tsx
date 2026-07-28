@@ -106,7 +106,6 @@ export default function StudentPage() {
       const reqs: LeaveRequest[] = [];
       snapshot.forEach((doc) => reqs.push({ id: doc.id, ...doc.data() } as LeaveRequest));
       
-      // เรียงลำดับจากวันที่ล่าสุดลงไป
       reqs.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setMyRequests(reqs);
     });
@@ -179,7 +178,6 @@ export default function StudentPage() {
     }) + ' น.';
   };
 
-  // ฟังก์ชันตรวจสอบว่าเป็น "วันเดียวกันกับวันนี้" หรือไม่
   const isToday = (timestamp: any) => {
     if (!timestamp || !timestamp.toDate) return false;
     const reqDate = timestamp.toDate();
@@ -193,7 +191,6 @@ export default function StudentPage() {
   const approvedCount = myRequests.filter(req => req.status === 'approved').length;
   const rejectedCount = myRequests.filter(req => req.status === 'rejected').length;
   
-  // ค้นหาคำร้องที่อนุมัติแล้ว *เฉพาะที่เป็นของวันนี้เท่านั้น*
   const latestApprovedToday = myRequests.find(req => req.status === 'approved' && isToday(req.createdAt));
 
   // ==========================================
@@ -214,7 +211,7 @@ export default function StudentPage() {
           <div className="text-center mb-4">
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-2 shadow-inner">🎒</div>
             <h2 className="text-2xl font-bold text-slate-800">ระบบนักเรียน</h2>
-            <p className="text-slate-500 text-sm">MRW E-Pass</p>
+            <p className="text-slate-500 text-sm">MR E-Pass Application</p>
           </div>
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-1">รหัสนักเรียน</label>
@@ -224,8 +221,24 @@ export default function StudentPage() {
             <label className="block text-sm font-semibold text-slate-700 mb-1">รหัสผ่าน</label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="รหัสผ่าน" className="w-full border border-slate-200 p-3.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
+          
           {loginError && <p className="text-red-500 text-sm font-medium text-center bg-red-50 p-2 rounded-lg">{loginError}</p>}
-          <button type="submit" disabled={isLoggingIn} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-md transition mt-2 disabled:bg-slate-400">เข้าสู่ระบบ</button>
+          
+          {/* ✅ จัดกลุ่มปุ่มให้อยู่คู่กันแบบ Grid */}
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <a 
+              href="/" 
+              className="w-full bg-slate-100 text-slate-600 hover:text-slate-800 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition flex items-center justify-center gap-1.5 text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              กลับหน้าหลัก
+            </a>
+            <button type="submit" disabled={isLoggingIn} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-md transition disabled:bg-slate-400 text-sm">
+              เข้าสู่ระบบ
+            </button>
+          </div>
         </form>
       </div>
     );
@@ -237,21 +250,36 @@ export default function StudentPage() {
   return (
     <div className="min-h-screen bg-slate-100 pb-10 font-sans relative">
       
-      {/* Header พร้อมปุ่ม Log out มุมขวาบน */}
+      {/* Header พร้อมปุ่มควบคุมมุมขวาบน */}
       <div className="bg-blue-600 text-white pt-10 pb-12 px-5 rounded-b-3xl shadow-md relative">
         
-        {/* 🔴 ปุ่มออกจากระบบ มุมขวาบน */}
-        <button 
-          onClick={handleLogout}
-          className="absolute top-5 right-5 text-blue-100 hover:text-white text-xs font-semibold bg-white/10 hover:bg-white/20 py-2 px-3.5 rounded-xl transition backdrop-blur-sm flex items-center gap-1.5 border border-white/20"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          ออกจากระบบ
-        </button>
+        <div className="absolute top-5 right-5 flex gap-2 z-20">
+          {/* 🔴 ปุ่มกลับหน้าหลัก (แสดงเฉพาะตอนอยู่หน้าฟอร์มเขียนคำร้อง) */}
+          {showForm && (
+            <button 
+              onClick={() => setShowForm(false)}
+              className="text-blue-100 hover:text-white text-xs font-semibold bg-white/10 hover:bg-white/20 py-2 px-3.5 rounded-xl transition backdrop-blur-sm flex items-center gap-1.5 border border-white/20 shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              หน้าหลัก
+            </button>
+          )}
 
-        <div className="flex justify-between items-center pr-28">
+          {/* 🔴 ปุ่มออกจากระบบ */}
+          <button 
+            onClick={handleLogout}
+            className="text-blue-100 hover:text-white text-xs font-semibold bg-white/10 hover:bg-white/20 py-2 px-3.5 rounded-xl transition backdrop-blur-sm flex items-center gap-1.5 border border-white/20 shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            ออกจากระบบ
+          </button>
+        </div>
+
+        <div className="flex justify-between items-center pr-28 relative z-10">
           <div>
             <h1 className="text-xl font-bold">MRW E-Pass</h1>
             <p className="text-blue-100 text-sm mt-1">{currentStudent?.studentName} ({currentStudent?.classroom})</p>
@@ -262,7 +290,6 @@ export default function StudentPage() {
 
       <div className="p-5 -mt-6 relative z-10 max-w-lg mx-auto">
         
-        {/* แสดง QR Code เฉพาะเมื่อได้รับการอนุมัติ และ ต้องเป็นวันที่ปัจจุบันเท่านั้น */}
         {!showForm && latestApprovedToday && (
           <div className="bg-white rounded-3xl shadow-xl border-t-8 border-green-500 overflow-hidden mb-6 animate-fade-in">
             <div className="p-6 bg-slate-50 flex flex-col items-center justify-center text-center">
@@ -312,9 +339,17 @@ export default function StudentPage() {
 
         {showForm ? (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 animate-fade-in">
-            <div className="flex justify-between items-center mb-4 border-b pb-2">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-800">เขียนใบขออนุญาต</h2>
-              <button onClick={() => setShowForm(false)} type="button" className="text-slate-400 hover:text-red-500 text-sm font-semibold">✕ ยกเลิก</button>
+              {/* 🔴 ปุ่มกลับหน้าหลักภายในฟอร์ม */}
+              <button 
+                onClick={() => setShowForm(false)} 
+                type="button" 
+                className="bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 text-xs font-bold py-1.5 px-3 rounded-lg transition flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                กลับหน้าหลัก
+              </button>
             </div>
             
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -338,7 +373,6 @@ export default function StudentPage() {
           </div>
         ) : (
           <>
-            {/* รายละเอียดประวัติการขออนุญาต (รูปแบบตาราง เรียงจากวันที่ล่าสุด) */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
               <h4 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
                 <span>📋</span> ประวัติการขออนุญาต

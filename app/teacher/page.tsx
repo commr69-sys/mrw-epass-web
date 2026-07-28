@@ -220,6 +220,7 @@ export default function TeacherPage() {
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">👩‍🏫</div>
             <h2 className="text-2xl font-bold text-slate-800">ระบบครูผู้สอน</h2>
+            <p className="text-slate-500 text-sm">MR E-Pass Approve</p>
           </div>
           
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
@@ -234,9 +235,21 @@ export default function TeacherPage() {
             
             {error && <p className="text-red-500 text-sm font-medium text-center bg-red-50 p-2 rounded-lg">{error}</p>}
             
-            <button type="submit" disabled={isLoggingIn} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-md transition mt-2 disabled:bg-slate-400">
-              เข้าสู่ระบบ
-            </button>
+            {/* ✅ จัดกลุ่มปุ่มให้อยู่คู่กันแบบ Grid */}
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <a 
+                href="/" 
+                className="w-full bg-slate-100 text-slate-600 hover:text-slate-800 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition flex items-center justify-center gap-1.5 text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                กลับหน้าหลัก
+              </a>
+              <button type="submit" disabled={isLoggingIn} className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-md transition disabled:bg-slate-400 text-sm">
+                เข้าสู่ระบบ
+              </button>
+            </div>
           </form>
         </div>
       </div>

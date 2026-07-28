@@ -117,8 +117,8 @@ export default function AdminPage() {
   // ==========================================
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-5 font-sans">
-        <div className="max-w-sm w-full bg-white p-8 rounded-2xl shadow-sm border-t-8 border-orange-500 overflow-hidden">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-5 font-sans relative">
+        <div className="max-w-sm w-full bg-white p-8 rounded-2xl shadow-sm border-t-8 border-orange-500 overflow-hidden z-10">
           <div className="text-center mb-6">
             <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">⚙️</div>
             <h2 className="text-2xl font-bold text-slate-800">ผู้จัดการระบบ (Admin)</h2>
@@ -137,9 +137,21 @@ export default function AdminPage() {
             
             {loginError && <p className="text-red-500 text-sm font-medium text-center bg-red-50 p-2 rounded-lg">{loginError}</p>}
             
-            <button type="submit" className="w-full bg-orange-600 text-white font-bold py-3.5 rounded-xl hover:bg-orange-700 shadow-md transition mt-2">
-              เข้าสู่ระบบ
-            </button>
+            {/* ✅ จัดกลุ่มปุ่มให้อยู่คู่กันแบบ Grid */}
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <a 
+                href="/" 
+                className="w-full bg-slate-100 text-slate-600 hover:text-slate-800 font-bold py-3.5 rounded-xl hover:bg-slate-200 transition flex items-center justify-center gap-1.5 text-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                กลับหน้าหลัก
+              </a>
+              <button type="submit" className="w-full bg-orange-600 text-white font-bold py-3.5 rounded-xl hover:bg-orange-700 shadow-md transition text-sm">
+                เข้าสู่ระบบ
+              </button>
+            </div>
           </form>
         </div>
       </div>
