@@ -87,6 +87,23 @@ export default function Home() {
             </div>
           </Link>
 
+
+
+          {/* 5. Director Button */}
+          <Link href="/director" className="group flex items-center p-5 bg-purple border-2 border-slate-100 rounded-2xl hover:border-purple-400 hover:bg-purple-50 hover:shadow-lg transition-all duration-300 ease-in-out cursor-pointer">
+            <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform shadow-inner">
+              📊
+            </div>
+            <div className="ml-5 text-left flex-1">
+              <h3 className="text-xl font-bold text-slate-800 group-hover:text-purple-700 transition-colors">ระบบผู้บริหาร (Director)</h3>
+              <p className="text-slate-500 text-sm mt-1">ดูรายงานและสถิติ</p>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-purple-200 group-hover:text-orange-700 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+            </div>
+          </Link>
+
+
         </div>
       </div>
     </div>
